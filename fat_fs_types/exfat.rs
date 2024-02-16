@@ -345,6 +345,10 @@ pub mod dir {
 		pub const TYPE: u8 = 0x85;
 	}
 
+	/// Attributes of a file.
+	///
+	/// The behavior of [`Attributes::all`]/[`Attributes::from_bits_truncate`] is
+	/// stable.
 	#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 	#[cfg_attr(feature = "bytemuck", derive(Pod, Zeroable))]
 	#[cfg_attr(

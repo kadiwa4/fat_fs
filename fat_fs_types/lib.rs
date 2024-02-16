@@ -1,14 +1,4 @@
-//! Helper library for accessing Microsoft's FAT12/16/32 and exFAT file systems.
-//!
-//! You will want to use one of the features `zerocopy` or `bytemuck`
-//! (together with the respective crate).
-//!
-//! A lot of the structs in here only implement `Copy` if you have
-//! `feature = "bytemuck"` enabled since some of them are quite large.
-//!
-//! - EFI FAT specification: [download](https://download.microsoft.com/download/1/6/1/161ba512-40e2-4cc9-843a-923143f3456c/fatgen103.doc)
-//! - [exFAT specification](https://learn.microsoft.com/en-us/windows/win32/fileio/exfat-specification)
-
+#![doc = include_str!("README.md")]
 #![no_std]
 
 pub mod exfat;
@@ -43,8 +33,8 @@ pub const MIN_BLK_SIZE: usize = 0x0200;
 pub const NONEXISTENT_CLUSTERS: ClusterIdx = 2;
 
 pub type ClusterIdx = u32;
-/// A globally unique identifier (usually called universally unique identifier
-/// (UUID) outside the Microsoft world) with mixed endianness.
+/// A globally unique identifier (usually called universally unique
+/// identifier/UUID outside the Microsoft world) with mixed endianness.
 pub type Guid = [u8; 0x10];
 /// Logical block addressing address or offset.
 pub type Lba = u64;
@@ -150,7 +140,7 @@ impl Wtf16Str {
 
 	#[inline]
 	const fn from_slice_const(slice: &[u16]) -> &Wtf16Str {
-		// SAFETY: Wtf16Str #[repr(transparent)]ly wraps [u16].
+		// SAFETY: Wtf16Str transparently wraps [u16].
 		unsafe { core::mem::transmute(slice) }
 	}
 
@@ -222,7 +212,7 @@ impl<const N: usize> AsMut<Wtf16Str> for [u16; N] {
 impl AsMut<Wtf16Str> for [u16] {
 	#[inline]
 	fn as_mut(&mut self) -> &mut Wtf16Str {
-		// SAFETY: Wtf16Str #[repr(transparent)]ly wraps [u16].
+		// SAFETY: Wtf16Str transparently wraps [u16].
 		unsafe { core::mem::transmute(self) }
 	}
 }
@@ -309,6 +299,7 @@ pub const fn unpack_date(packed: u16) -> (i32, u8, u8) {
 	)
 }
 
+/// Error thrown by [`pack_date`].
 #[derive(Clone, Copy, Debug)]
 pub struct PackDateError {
 	saturating_date: u16,
@@ -317,6 +308,7 @@ pub struct PackDateError {
 }
 
 impl PackDateError {
+	/// Whether an overflow was the cause, as opposed to an underflow.
 	#[inline]
 	pub const fn overflow(self) -> bool {
 		self.saturating_time != 0

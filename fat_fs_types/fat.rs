@@ -284,6 +284,9 @@ impl LongNameEntry {
 }
 
 /// Attributes of a file.
+///
+/// The behavior of [`Attributes::all`]/[`Attributes::from_bits_truncate`] is
+/// stable.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "bytemuck", derive(Pod, Zeroable))]
 #[cfg_attr(
@@ -294,7 +297,6 @@ impl LongNameEntry {
 pub struct Attributes(u8);
 
 bitflags! {
-	// when modifying this, make sure the output of Attributes::all doesn't change
 	impl Attributes: u8 {
 		/// Indicates that writes to the file should fail.
 		const READ_ONLY = 1;
@@ -324,7 +326,7 @@ bitflags! {
 	}
 }
 
-/// Computes the checksum of the short name.
+/// Computes the checksum of a short name.
 ///
 /// # Examples
 /// ```
@@ -338,7 +340,7 @@ pub fn name_checksum(name: &ShortName) -> u8 {
 		.fold(0, |sum, &byte| u8::wrapping_add(sum.rotate_right(1), byte))
 }
 
-/// Whether the char is valid in a short name under the ASCII code page.
+/// Whether or not a char is valid in a short name under the ASCII code page.
 ///
 /// # Examples
 /// ```
@@ -363,7 +365,7 @@ pub fn is_valid_ascii_short_char(b: u8) -> bool {
 	*VALID.get(b as usize >> 3).unwrap_or(&0) & 1_u8.wrapping_shl(b as u32) != 0
 }
 
-/// Whether the char is valid in a long name.
+/// Whether or not a char is valid in a long name.
 ///
 /// # Examples
 /// ```
