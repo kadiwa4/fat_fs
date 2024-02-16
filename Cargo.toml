@@ -1,0 +1,11 @@
+[workspace]
+resolver = "2"
+members = ["fat_fs_types"]
+
+[workspace.lints.rust]
+rust_2018_idioms = "warn"
+macro_use_extern_crate = "warn"
+meta_variable_misuse = "warn"
+missing_abi = "warn"
+unused_macro_rules = "warn"
+unused_qualifications = "warn"
