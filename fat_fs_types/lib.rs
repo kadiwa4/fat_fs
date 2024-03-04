@@ -26,8 +26,8 @@ use bytemuck::{Pod, Zeroable};
 #[cfg(feature = "zerocopy")]
 use zerocopy::{AsBytes, FromBytes, FromZeroes, Unaligned};
 
-pub const MAX_BLK_SIZE: usize = 0x1000;
 pub const MIN_BLK_SIZE: usize = 0x0200;
+pub const MAX_BLK_SIZE: usize = 0x1000;
 /// Number of clusters that show up at the start of the FAT but don't correspond
 /// to a heap allocation.
 pub const NONEXISTENT_CLUSTERS: ClusterIdx = 2;
@@ -39,8 +39,11 @@ pub type Guid = [u8; 0x10];
 /// Logical block addressing address or offset.
 pub type Lba = u64;
 
+/// Unaligned little-endian 16-bit integer.
 pub type U16Le = [u8; 2];
+/// Unaligned little-endian 32-bit integer.
 pub type U32Le = [u8; 4];
+/// Unaligned little-endian 64-bit integer.
 pub type U64Le = [u8; 8];
 
 /// A cylinder-head-sector address in the format used by x86's interrupt `0x13`.
@@ -100,6 +103,7 @@ impl Ord for ChsAddr {
 	}
 }
 
+/// Hard disk geometry values used by x86's interrupt `0x13`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct DiskGeometry {
 	pub heads: u16,

@@ -40,7 +40,7 @@ pub const UPCASE_TABLE_MASS_IDENTITY_MARK: u16 = 0xFFFF;
 pub const FAT_ENTRY0: ClusterIdx = 0xFFFF_FFF8;
 pub const FAT_ENTRY1: ClusterIdx = 0xFFFF_FFFF;
 pub const BAD_CLUSTER_MARK: ClusterIdx = 0xFFFF_FFF7;
-pub const END_OF_ALLOC_MARK: ClusterIdx = 0xFFFF_FFF7;
+pub const END_OF_ALLOC_MARK: ClusterIdx = 0xFFFF_FFFF;
 
 #[derive(Clone)]
 #[cfg_attr(feature = "bytemuck", derive(Copy, Pod, Zeroable))]
@@ -74,6 +74,7 @@ pub struct BootRecord {
 }
 
 impl BootRecord {
+	// offsets of struct fields
 	const FLAGS_OFFSET: usize = 0x6A;
 	const BLK_SIZE_LOG2_OFFSET: usize = 0x6C;
 	const PERCENT_OCCUPIED_OFFSET: usize = 0x70;
@@ -109,15 +110,15 @@ bitflags! {
 	derive(AsBytes, FromZeroes, FromBytes, Unaligned)
 )]
 #[repr(C)]
-pub struct GenericParameters {
+pub struct GenericParams {
 	pub guid: Guid,
-	pub custom: [u8; 0x20],
+	pub _custom: [u8; 0x20],
 }
 
-impl GenericParameters {
+impl GenericParams {
 	pub const NULL: Self = Self {
 		guid: [0; 0x10],
-		custom: [0; 0x20],
+		_custom: [0; 0x20],
 	};
 }
 
@@ -128,7 +129,7 @@ impl GenericParameters {
 	derive(AsBytes, FromZeroes, FromBytes, Unaligned)
 )]
 #[repr(C)]
-pub struct FlashParameters {
+pub struct FlashParams {
 	pub guid: Guid,
 	pub erase_blk_size: U32Le,
 	pub page_size: U32Le,
@@ -140,7 +141,7 @@ pub struct FlashParameters {
 	pub _reserved: [u8; 4],
 }
 
-impl FlashParameters {
+impl FlashParams {
 	pub const GUID: Guid = [
 		0x46, 0x7E, 0x0C, 0x0A, 0x99, 0x33, 0x21, 0x40, 0x90, 0xC8, 0xFA, 0x6D, 0x38, 0x9C, 0x4B,
 		0xA2,
@@ -183,6 +184,7 @@ impl Hasher for Checksum {
 	}
 }
 
+/// Contents of a directory.
 pub mod dir {
 	use super::*;
 
@@ -195,7 +197,7 @@ pub mod dir {
 	#[repr(C)]
 	pub struct GenericEntry {
 		pub entry_type: u8,
-		pub custom: [u8; 0x13],
+		pub _custom: [u8; 0x13],
 		pub first_cluster: U32Le,
 		pub data_capacity: U64Le,
 	}
@@ -220,7 +222,7 @@ pub mod dir {
 		pub secondary_count: u8,
 		pub set_checksum: U16Le,
 		pub flags: PrimaryEntryFlags,
-		pub custom: [u8; 0xE],
+		pub _custom: [u8; 0xE],
 		pub first_cluster: U32Le,
 		pub data_capacity: U64Le,
 	}
@@ -403,7 +405,7 @@ pub mod dir {
 	pub struct SecondaryEntry {
 		pub entry_type: u8,
 		pub flags: SecondaryEntryFlags,
-		pub custom: [u8; 0x12],
+		pub _custom: [u8; 0x12],
 		pub first_cluster: U32Le,
 		pub data_capacity: U64Le,
 	}
@@ -477,7 +479,7 @@ pub mod dir {
 		pub entry_type: u8,
 		pub flags: SecondaryEntryFlags,
 		pub vendor_guid: Guid,
-		pub custom: [u8; 0xE],
+		pub _custom: [u8; 0xE],
 	}
 
 	impl VendorExtEntry {
@@ -495,7 +497,7 @@ pub mod dir {
 		pub entry_type: u8,
 		pub flags: SecondaryEntryFlags,
 		pub vendor_guid: Guid,
-		pub custom: [u8; 2],
+		pub _custom: [u8; 2],
 		pub first_cluster: U32Le,
 		pub data_capacity: U64Le,
 	}

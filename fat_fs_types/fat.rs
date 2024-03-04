@@ -8,6 +8,7 @@ use zerocopy::{AsBytes, FromBytes, FromZeroes, Unaligned};
 
 use crate::{ClusterIdx, U16Le, U32Le};
 
+/// Number of special sentinel values that indicate the end of an allocation.
 pub const END_OF_ALLOC_MARK_COUNT: ClusterIdx = 8;
 pub const MAX_CLUSTER_SIZE: usize = 0x8000;
 
@@ -25,22 +26,32 @@ pub mod fat_len {
 	pub const FAT32_MAX: ClusterIdx = 0x0FFF_FFF6;
 }
 
-/// Flags placed in the FAT entry at index 1.
-pub mod fat_entry1_flag {
-	use crate::ClusterIdx;
+bitflags! {
+	/// Flags placed in the FAT entry at index 1.
+	#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+	pub struct FatEntry1Flags: u8 {
+		/// Set if no disk read/write errors were encountered.
+		const NO_IO_ERROR = 4;
+		/// Whether or not the file system driver dismounted the volume properly
+		/// the last time it had the volume mounted.
+		const CLEAN = 8;
+	}
+}
 
-	pub const FAT16_NO_IO_ERROR: ClusterIdx = 0x4000;
-	pub const FAT16_CLEAN: ClusterIdx = 0x8000;
-	pub const FAT32_NO_IO_ERROR: ClusterIdx = 0x0400_0000;
-	pub const FAT32_CLEAN: ClusterIdx = 0x0800_0000;
+impl Default for FatEntry1Flags {
+	#[inline]
+	fn default() -> Self {
+		Self::all()
+	}
 }
 
 pub const MAX_LONG_NAME_LEN: usize = 0x0100;
 pub const MAX_LONG_PATH_LEN: usize = 0x0104;
 pub static NO_NAME: ShortName = *b"NO NAME    ";
 pub static SELF_DIR: ShortName = *b".          ";
-pub static SUPER_DIR: ShortName = *b"..         ";
+pub static PARENT_DIR: ShortName = *b"..         ";
 
+/// An 8.3 name of a directory child.
 pub type ShortName = [u8; 0xB];
 
 /// Type of FAT file system: FAT12, FAT16 or FAT32.
@@ -55,6 +66,8 @@ pub enum FatType {
 }
 
 impl FatType {
+	/// Value to write to
+	/// [`BootRecordEndExt::fat_type_name`](reserved_reg::BootRecordEndExt::fat_type_name).
 	pub const fn name(self) -> &'static [u8; 8] {
 		match self {
 			Self::Fat12 => b"FAT12   ",
@@ -71,10 +84,45 @@ impl FatType {
 		}
 	}
 
+	/// Sentinel value indicating the end of an allocation.
+	///
+	/// There is more than one value reserved for this. This function will
+	/// return the canonical value according to Microsoft.
+	pub const fn canon_end_of_alloc_mark(self) -> ClusterIdx {
+		self.bad_cluster_mark() + END_OF_ALLOC_MARK_COUNT
+	}
+
 	pub const fn fat_byte_size(self, entry_count: ClusterIdx) -> u32 {
 		match self {
 			Self::Fat12 => entry_count + (entry_count + 1) / 2,
-			_ => entry_count << self as u8,
+			_ => entry_count * (1 << self as u8),
+		}
+	}
+
+	pub const fn pack_fat_entry0(self, medium_type: u8) -> ClusterIdx {
+		(match self {
+			Self::Fat12 => 0x0F00,
+			Self::Fat16 => 0xFF00,
+			Self::Fat32 => 0x0FFF_FF00,
+		}) | medium_type as u32
+	}
+
+	pub const fn pack_fat_entry1(self, flags: FatEntry1Flags) -> ClusterIdx {
+		match self {
+			Self::Fat12 => 0x0FFF,
+			Self::Fat16 => 0x3FFF | (flags.bits() as u32) << 0xC,
+			Self::Fat32 => 0x03FF_FFFF | (flags.bits() as u32) << 0x18,
+		}
+	}
+
+	#[inline]
+	pub const fn unpack_fat_entry1(self, entry: ClusterIdx) -> Option<FatEntry1Flags> {
+		if matches!(self, Self::Fat12) {
+			None
+		} else {
+			Some(FatEntry1Flags::from_bits_retain(
+				(entry >> (0xC * self as u8)) as u8,
+			))
 		}
 	}
 }
@@ -124,6 +172,9 @@ pub mod reserved_reg {
 
 	pub const PRIMARY_LBA: Lba = 0;
 	pub const BACKUP_LBA: Lba = 6;
+	/// When creating a backup of the start of the partition, not just the first
+	/// block should be copied. This is the number of blocks that are backed up.
+	pub const BOOT_REG_LBA_SIZE: Lba = 3;
 
 	#[derive(Clone)]
 	#[cfg_attr(feature = "bytemuck", derive(Copy, Pod, Zeroable))]
@@ -147,7 +198,7 @@ pub mod reserved_reg {
 		pub heads: U16Le,
 		pub partition_lba_offset: U32Le,
 		pub volume_lba_size32: U32Le,
-		pub rest: [u8; 0x01DA],
+		pub boot_code: [u8; 0x01DA],
 		pub signature: [u8; 2],
 	}
 
@@ -236,6 +287,26 @@ pub mod reserved_reg {
 	derive(AsBytes, FromZeroes, FromBytes, Unaligned)
 )]
 #[repr(C)]
+pub struct GenericEntry {
+	pub name_byte0: u8,
+	pub _custom0: [u8; 0xA],
+	pub attributes: Attributes,
+	pub _custom1: [u8; 0x14],
+}
+
+impl GenericEntry {
+	pub const BYTE0_END: u8 = 0;
+	pub const BYTE0_SIDESTEP_VACANT: u8 = 5;
+	pub const BYTE0_VACANT: u8 = 0xE5;
+}
+
+#[derive(Clone)]
+#[cfg_attr(feature = "bytemuck", derive(Copy, Pod, Zeroable))]
+#[cfg_attr(
+	feature = "zerocopy",
+	derive(AsBytes, FromZeroes, FromBytes, Unaligned)
+)]
+#[repr(C)]
 pub struct ChildEntry {
 	pub name: ShortName,
 	pub attributes: Attributes,
@@ -250,12 +321,6 @@ pub struct ChildEntry {
 	pub write_date: U16Le,
 	pub first_cluster_lo: U16Le,
 	pub data_size: U32Le,
-}
-
-impl ChildEntry {
-	pub const ENTRY_END: u8 = 0;
-	pub const ENTRY_SIDESTEP_VACANT: u8 = 5;
-	pub const ENTRY_VACANT: u8 = 0xE5;
 }
 
 #[derive(Clone)]
@@ -279,7 +344,7 @@ pub struct LongNameEntry {
 impl LongNameEntry {
 	/// Number of WTF-16 code units in one component.
 	pub const CHAR_COUNT: usize = 0xD;
-	/// Only possible value of `component_type`.
+	/// The only possible value of `component_type`.
 	pub const TYPE_CHILD: u8 = 0;
 }
 
@@ -330,39 +395,43 @@ bitflags! {
 ///
 /// # Examples
 /// ```
-/// # use fat_fs_types::fat::{name_checksum, NO_NAME, SELF_DIR, SUPER_DIR};
+/// # use fat_fs_types::fat::{name_checksum, NO_NAME, PARENT_DIR, SELF_DIR};
 /// assert_eq!(name_checksum(&NO_NAME), 0xB3);
 /// assert_eq!(name_checksum(&SELF_DIR), 0x77);
-/// assert_eq!(name_checksum(&SUPER_DIR), 0xC2);
+/// assert_eq!(name_checksum(&PARENT_DIR), 0xC2);
 /// ```
 pub fn name_checksum(name: &ShortName) -> u8 {
 	name.iter()
 		.fold(0, |sum, &byte| u8::wrapping_add(sum.rotate_right(1), byte))
 }
 
-/// Whether or not a char is valid in a short name under the ASCII code page.
+/// Whether or not a char is valid in an ASCII short name (returns `true` for
+/// non-ASCII characters).
+///
+/// `.` and lower-case ASCII characters are not considered valid.
 ///
 /// # Examples
 /// ```
 /// # use fat_fs_types::fat::is_valid_ascii_short_char;
-/// for b in 0..0x80 {
+/// for b in 0..=0xFF {
 ///     assert_eq!(
 ///         is_valid_ascii_short_char(b),
-///         matches!(
+///         !matches!(
 ///             b,
-///             b' ' | b'!' | b'#'..=b')' | b'-' | b'0'..=b'9' | b'@'..=b'Z' | b'^'..=b'`' | b'{'
-///             | b'}' | b'~'
+///             (..=0x1F) | b'"' | b'*'..=b',' | b'.' | b'/' | b':'..=b'?' | b'['..=b']'
+///             | b'a'..=b'z' | b'|'
 ///         ),
 ///     );
 /// }
 /// ```
 pub fn is_valid_ascii_short_char(b: u8) -> bool {
-	static VALID: [u8; 0x10] = [
+	static VALID: [u8; 0x20] = [
 		0x00, 0x00, 0x00, 0x00, 0xFB, 0x23, 0xFF, 0x03, 0xFF, 0xFF, 0xFF, 0xC7, 0x01, 0x00, 0x00,
-		0x68,
+		0xE8, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+		0xFF, 0xFF,
 	];
 
-	*VALID.get(b as usize >> 3).unwrap_or(&0) & 1_u8.wrapping_shl(b as u32) != 0
+	VALID[b as usize >> 3] & 1_u8.wrapping_shl(b as u32) != 0
 }
 
 /// Whether or not a char is valid in a long name.
@@ -375,16 +444,17 @@ pub fn is_valid_ascii_short_char(b: u8) -> bool {
 ///         is_valid_long_char(c),
 ///         !matches!(
 ///             c as u8,
-///             (..=0x1F) | b'"' | b'*' | b'/' | b':' | b'<' | b'>' | b'?' | b'\\' | b'|' | 0x7F
+///             (..=0x1F) | b'"' | b'*' | b'/' | b':' | b'<' | b'>' | b'?' | b'\\' | b'|'
 ///         ),
 ///     );
 /// }
+/// // all non-ASCII chars are valid
 /// assert!(is_valid_long_char(0x80));
 /// ```
 pub fn is_valid_long_char(b: u16) -> bool {
 	static VALID: [u8; 0x10] = [
 		0x00, 0x00, 0x00, 0x00, 0xFB, 0x7B, 0xFF, 0x2B, 0xFF, 0xFF, 0xFF, 0xEF, 0xFF, 0xFF, 0xFF,
-		0x6F,
+		0xEF,
 	];
 
 	*VALID.get(b as usize >> 3).unwrap_or(&0xFF) & 1_u8.wrapping_shl(b as u32) != 0
