@@ -198,7 +198,7 @@ pub mod reserved_reg {
 		pub heads: U16Le,
 		pub partition_lba_offset: U32Le,
 		pub volume_lba_size32: U32Le,
-		pub boot_code: [u8; 0x01DA],
+		pub rest: [u8; 0x01DA],
 		pub signature: [u8; 2],
 	}
 
