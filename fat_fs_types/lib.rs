@@ -4,8 +4,6 @@
 pub mod exfat;
 pub mod fat;
 
-#[cfg(feature = "alloc")]
-extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std;
 
@@ -15,10 +13,8 @@ pub use bytemuck;
 pub use zerocopy;
 
 use core::{
-	char::DecodeUtf16Error,
 	cmp::Ordering,
-	fmt::{self, Debug, Display, Formatter, Write},
-	iter::FusedIterator,
+	fmt::{self, Debug, Display, Formatter},
 };
 
 #[cfg(feature = "bytemuck")]
@@ -54,7 +50,7 @@ pub type U64Le = [u8; 8];
 	derive(AsBytes, FromZeroes, FromBytes, Unaligned)
 )]
 #[repr(C)]
-pub struct ChsAddr([u8; 3]);
+pub struct ChsAddr(pub [u8; 3]);
 
 impl ChsAddr {
 	/// An invalid all-zero cylinder-head-sector address.
@@ -66,7 +62,7 @@ impl ChsAddr {
 	/// the values `cylinder` or `sector` are too large.
 	#[inline]
 	pub const fn new(cylinder: u16, head: u8, sector: u8) -> Option<Self> {
-		if cylinder & 0xFC00 == 0 && sector & 0xC0 == 0 {
+		if cylinder < 0x0400 && sector < 0x40 {
 			Some(Self([
 				head,
 				sector | ((cylinder >> 2) as u8 & 0xC0),
@@ -98,8 +94,10 @@ impl PartialOrd for ChsAddr {
 }
 impl Ord for ChsAddr {
 	fn cmp(&self, other: &Self) -> Ordering {
-		u16::cmp(&self.cylinder(), &other.cylinder())
-			.then_with(|| Ord::cmp(&self.0[..2], &other.0[..2]))
+		Ord::cmp(
+			&(self.cylinder(), self.head(), self.0[1]),
+			&(other.cylinder(), other.head(), other.0[1]),
+		)
 	}
 }
 
@@ -131,113 +129,6 @@ impl DiskGeometry {
 		(chs.cylinder() as u64 * self.heads as u64 + chs.head() as u64)
 			* self.sectors_per_track as u64
 			+ chs.sector() as u64
-	}
-}
-
-/// A string slice of potentially ill-formed, little endian UTF-16 text.
-#[cfg_attr(feature = "zerocopy", derive(AsBytes, FromZeroes, FromBytes))]
-#[repr(transparent)]
-pub struct Wtf16Str([u16]);
-
-impl Wtf16Str {
-	pub const EMPTY: &'static Self = Self::from_slice_const(&[]);
-
-	#[inline]
-	const fn from_slice_const(slice: &[u16]) -> &Wtf16Str {
-		// SAFETY: Wtf16Str transparently wraps [u16].
-		unsafe { core::mem::transmute(slice) }
-	}
-
-	pub fn len(&self) -> usize {
-		self.0.len()
-	}
-
-	pub fn is_empty(&self) -> bool {
-		self.0.is_empty()
-	}
-
-	/// Iterate over the WTF-16 code points.
-	pub fn code_units(
-		&self,
-	) -> impl DoubleEndedIterator<Item = u16> + ExactSizeIterator + FusedIterator + '_ {
-		self.0.iter().map(|&c| u16::from_le(c))
-	}
-
-	/// Same as `char::decode_utf16(s.code_units())`.
-	///
-	/// Use `.map(|r| r.unwrap_or(char::REPLACEMENT_CHARACTER))` for lossy
-	/// decoding.
-	pub fn chars(&self) -> impl Iterator<Item = Result<char, DecodeUtf16Error>> + '_ {
-		char::decode_utf16(self.0.iter().map(|&c| u16::from_le(c)))
-	}
-
-	#[cfg(feature = "alloc")]
-	pub fn try_to_string(&self) -> Result<alloc::string::String, DecodeUtf16Error> {
-		self.chars().collect::<Result<alloc::string::String, _>>()
-	}
-}
-
-impl AsRef<Self> for Wtf16Str {
-	#[inline]
-	fn as_ref(&self) -> &Self {
-		self
-	}
-}
-impl AsMut<Self> for Wtf16Str {
-	#[inline]
-	fn as_mut(&mut self) -> &mut Self {
-		self
-	}
-}
-impl<const N: usize> AsRef<Wtf16Str> for [u16; N] {
-	#[inline]
-	fn as_ref(&self) -> &Wtf16Str {
-		self[..].as_ref()
-	}
-}
-impl AsRef<Wtf16Str> for [u16] {
-	#[inline]
-	fn as_ref(&self) -> &Wtf16Str {
-		Wtf16Str::from_slice_const(self)
-	}
-}
-impl AsRef<[u16]> for Wtf16Str {
-	#[inline]
-	fn as_ref(&self) -> &[u16] {
-		&self.0
-	}
-}
-impl<const N: usize> AsMut<Wtf16Str> for [u16; N] {
-	#[inline]
-	fn as_mut(&mut self) -> &mut Wtf16Str {
-		self[..].as_mut()
-	}
-}
-impl AsMut<Wtf16Str> for [u16] {
-	#[inline]
-	fn as_mut(&mut self) -> &mut Wtf16Str {
-		// SAFETY: Wtf16Str transparently wraps [u16].
-		unsafe { core::mem::transmute(self) }
-	}
-}
-impl AsMut<[u16]> for Wtf16Str {
-	#[inline]
-	fn as_mut(&mut self) -> &mut [u16] {
-		&mut self.0
-	}
-}
-
-impl Debug for Wtf16Str {
-	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-		f.write_char('"')?;
-		for c in self.chars() {
-			match c {
-				Ok('\'') => f.write_char('\'')?,
-				Ok(c) => Display::fmt(&c.escape_debug(), f)?,
-				Err(e) => write!(f, "\\u{{{:x}}}", e.unpaired_surrogate())?,
-			}
-		}
-		f.write_char('"')
 	}
 }
 

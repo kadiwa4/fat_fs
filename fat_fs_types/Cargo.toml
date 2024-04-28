@@ -3,10 +3,10 @@ name = "fat_fs_types"
 version = "0.2.1"
 edition = "2021"
 rust-version = "1.73.0"
-description = "low-level access to FAT12/16/32 and exFAT file systems"
+description = "low-level definitions for FAT12/16/32 and exFAT file systems"
 repository = "https://github.com/kadiwa4/fat_fs"
 license = "MIT"
-categories = ["embedded", "filesystem", "no-std::no-alloc"]
+categories = ["filesystem", "no-std::no-alloc"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -19,8 +19,7 @@ bytemuck = { version = "1.14.0", features = ["min_const_generics", "derive"], op
 zerocopy = { version = "0.7.31", default-features = false, features = ["derive"], optional = true }
 
 [features]
-alloc = []
-std = ["alloc"]
+std = []
 
 [lib]
 path = "lib.rs"

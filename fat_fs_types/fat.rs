@@ -6,7 +6,7 @@ use bytemuck::{Pod, Zeroable};
 #[cfg(feature = "zerocopy")]
 use zerocopy::{AsBytes, FromBytes, FromZeroes, Unaligned};
 
-use crate::{ClusterIdx, U16Le, U32Le};
+use crate::{ClusterIdx, Lba, U16Le, U32Le};
 
 /// Number of special sentinel values that indicate the end of an allocation.
 pub const END_OF_ALLOC_MARK_COUNT: ClusterIdx = 8;
@@ -16,6 +16,9 @@ pub const MAX_CLUSTER_SIZE: usize = 0x8000;
 ///
 /// **Note:** This is not the same as the cluster count; this is the number of
 /// entries in a FAT and not the number of clusters on the heap.
+/// The `*_MAX` values also never indicate the maximum valid cluster index for
+/// file systems of that FAT type. They are one larger than the maximum valid
+/// cluster index could ever be.
 pub mod fat_len {
 	use crate::ClusterIdx;
 
@@ -23,7 +26,7 @@ pub mod fat_len {
 	pub const FAT16_MIN: ClusterIdx = 0x0FF7;
 	pub const FAT16_MAX: ClusterIdx = 0xFFF6;
 	pub const FAT32_MIN: ClusterIdx = 0xFFF7;
-	pub const FAT32_MAX: ClusterIdx = 0x0FFF_FFF6;
+	pub const FAT32_MAX: ClusterIdx = 0x0FFF_FFF7;
 }
 
 bitflags! {
@@ -45,11 +48,15 @@ impl Default for FatEntry1Flags {
 	}
 }
 
-pub const MAX_LONG_NAME_LEN: usize = 0x0100;
-pub const MAX_LONG_PATH_LEN: usize = 0x0104;
-pub static NO_NAME: ShortName = *b"NO NAME    ";
-pub static SELF_DIR: ShortName = *b".          ";
-pub static PARENT_DIR: ShortName = *b"..         ";
+/// Maximum length of a long name.
+pub const MAX_LONG_NAME_LEN: usize = 0xFF;
+/// Maximum length of an 8.3 path.
+pub const MAX_SHORT_PATH_LEN: usize = 0x4F;
+/// Maximum length of a long name path.
+pub const MAX_LONG_PATH_LEN: usize = 0x0103;
+pub const NO_NAME: ShortName = *b"NO NAME    ";
+pub const SELF_DIR: ShortName = *b".          ";
+pub const PARENT_DIR: ShortName = *b"..         ";
 
 /// An 8.3 name of a directory child.
 pub type ShortName = [u8; 0xB];
@@ -66,16 +73,36 @@ pub enum FatType {
 }
 
 impl FatType {
-	/// Value to write to
-	/// [`BootRecordEndExt::fat_type_name`](reserved_reg::BootRecordEndExt::fat_type_name).
-	pub const fn name(self) -> &'static [u8; 8] {
+	/// Value to write to [`BootRecordTailExt::fat_type_name`][fat_type_name].
+	///
+	/// [fat_type_name]: boot_reg::BootRecordTailExt::fat_type_name
+	#[inline]
+	pub const fn name(self) -> [u8; 8] {
 		match self {
-			Self::Fat12 => b"FAT12   ",
-			Self::Fat16 => b"FAT16   ",
-			Self::Fat32 => b"FAT32   ",
+			Self::Fat12 => *b"FAT12   ",
+			Self::Fat16 => *b"FAT16   ",
+			Self::Fat32 => *b"FAT32   ",
 		}
 	}
 
+	#[inline]
+	pub const fn fat_entry_bit_size(self) -> u8 {
+		match self {
+			Self::Fat12 => 0xC,
+			Self::Fat16 => 0x10,
+			Self::Fat32 => 0x20,
+		}
+	}
+
+	#[inline]
+	pub const fn default_fat_base_lba(self) -> Lba {
+		match self {
+			Self::Fat32 => 0x20,
+			_ => 1,
+		}
+	}
+
+	#[inline]
 	pub const fn bad_cluster_mark(self) -> ClusterIdx {
 		match self {
 			Self::Fat12 => 0x0FF7,
@@ -88,10 +115,12 @@ impl FatType {
 	///
 	/// There is more than one value reserved for this. This function will
 	/// return the canonical value according to Microsoft.
+	#[inline]
 	pub const fn canon_end_of_alloc_mark(self) -> ClusterIdx {
 		self.bad_cluster_mark() + END_OF_ALLOC_MARK_COUNT
 	}
 
+	#[inline]
 	pub const fn fat_byte_size(self, entry_count: ClusterIdx) -> u32 {
 		match self {
 			Self::Fat12 => entry_count + (entry_count + 1) / 2,
@@ -127,46 +156,52 @@ impl FatType {
 	}
 }
 
-/// The "reserved region" of the FAT volume contains the boot record and FSInfo
-/// structures.
+/// The "boot region" (aka "reserved region") of the FAT volume contains the
+/// boot record and `FSInfo` structures.
 ///
 /// Field names ending with `lba_size` indicate that the field counts the number
-/// of blocks that something occupies.
+/// of blocks that something occupies (as opposed to byte size or bit size).
 ///
 /// # First block
 ///
 /// The beginning of the first block is structured like this:
 ///
+/// (`BootRecord*` is short for the structs [`BootRecordCommon`],
+/// [`BootRecord12_16`] and [`BootRecord32`]).
+///
 /// ```text
-/// byte              FAT12/FAT16                              FAT32
-///      +-----------------------------------+ +-----------------------------------+
-/// 0x00 |         BootRecord start          | |         BootRecord start          |
-///  ... |                ...                | |                ...                |
-/// 0x20 |   BootRecord::volume_lba_size32   | |   BootRecord::volume_lba_size32   |
-///      +-----------------------------------+ +-----------------------------------+
-/// 0x24 |        BootRecordEnd start        | |       BootRecordExt32 start       |
-/// 0x25 |     BootRecordEnd::_reserved      | |                ...                |
-///      +-----------------------------------+ |                                   |
-/// 0x26 | BootRecordEndExt (optional) start | |                                   |
-///  ... |                ...                | |                                   |
-///  ... |  BootRecordEndExt (optional) end  | |                                   |
-/// 0x3E +-----------------------------------+ |                ...                |
-///  ...                                       |        BootRecordExt32 end        |
-///  ...                                       +-----------------------------------+
-/// 0x40                                       |        BootRecordEnd start        |
-/// 0x41                                       |     BootRecordEnd::_reserved      |
-///                                            +-----------------------------------+
-/// 0x42                                       | BootRecordEndExt (optional) start |
-///  ...                                       |                ...                |
-///  ...                                       |  BootRecordEndExt (optional) end  |
-/// 0x5A                                       +-----------------------------------+
+/// byte            FAT12/FAT16                          FAT32
+///      ┌───────────────────────────────┐ ┌───────────────────────────────┐
+/// 0x00 │    BootRecord*::jump_boot     │ │    BootRecord*::jump_boot     │
+/// 0x03 │     BootRecord*::oem_name     │ │     BootRecord*::oem_name     │
+///  ... │┌─────────────────────────────┐│ │┌┬───────────────────────────┬┐│
+/// 0x0B ││          BpbCommon          ││ │││         BpbCommon         │││
+///  ... ││             ...             ││ │││            ...            │││
+///  ... │├─────────────────────────────┤│ ││└───────────────────────────┘││
+/// 0x24 ││  BootRecordTail::drive_num  ││ ││    Bpb32::fat_lba_size32    ││
+/// 0x25 ││  BootRecordTail::_reserved  ││ ││             ...             ││
+///      ││┌───────────────────────────┐││ ││                             ││
+/// 0x26 │││     BootRecordTailExt     │││ ││                             ││
+///  ... |||            ...            ||| ││             ...             ││
+/// 0x34 └┴┴───────────────────────────┴┴┘ ││      Bpb32::_reserved       ││
+///  ...           (end at 0x3E)           │├─────────────────────────────┤│
+/// 0x40                                   ││  BootRecordTail::drive_num  ││
+/// 0x41                                   ││  BootRecordTail::_reserved  ││
+///                                        ││┌───────────────────────────┐││
+/// 0x42                                   │││     BootRecordTailExt     │││
+///  ...                                   │││            ...            │││
+///                                        └┴┴───────────────────────────┴┴┘
+///                                                   (end at 0x5A)
 /// ```
 ///
-/// Note that [`BootRecordEndExt`] is not actually allowed to be missing
-/// according to the EFI FAT specification, but it does have its own signature.
+/// Note that [`BootRecordTailExt`] is not allowed to be missing according to
+/// the EFI FAT specification, but it does have its own signature.
 ///
-/// [`BootRecordEndExt`]: reserved_reg::BootRecordEndExt
-pub mod reserved_reg {
+/// [`BootRecordCommon`]: boot_reg::BootRecordCommon
+/// [`BootRecord12_16`]: boot_reg::BootRecord12_16
+/// [`BootRecord32`]: boot_reg::BootRecord32
+/// [`BootRecordTailExt`]: boot_reg::BootRecordTailExt
+pub mod boot_reg {
 	use super::*;
 	use crate::Lba;
 
@@ -183,9 +218,58 @@ pub mod reserved_reg {
 		derive(AsBytes, FromZeroes, FromBytes, Unaligned)
 	)]
 	#[repr(C)]
-	pub struct BootRecord {
+	pub struct BootRecordCommon {
 		pub jump_boot: [u8; 3],
 		pub oem_name: [u8; 8],
+		pub bpb: BpbCommon,
+		pub _rest: [u8; 0x01DA],
+		pub signature: [u8; 2],
+	}
+
+	impl BootRecordCommon {
+		pub const SIGNATURE: [u8; 2] = 0xAA55_u16.to_le_bytes();
+	}
+
+	#[derive(Clone)]
+	#[cfg_attr(feature = "bytemuck", derive(Copy, Pod, Zeroable))]
+	#[cfg_attr(
+		feature = "zerocopy",
+		derive(AsBytes, FromZeroes, FromBytes, Unaligned)
+	)]
+	#[repr(C)]
+	pub struct BootRecord12_16 {
+		pub jump_boot: [u8; 3],
+		pub oem_name: [u8; 8],
+		pub bpb: BpbCommon,
+		pub tail: BootRecordTail,
+		pub _boot_code: [u8; 0x01C0],
+		pub signature: [u8; 2],
+	}
+
+	#[derive(Clone)]
+	#[cfg_attr(feature = "bytemuck", derive(Copy, Pod, Zeroable))]
+	#[cfg_attr(
+		feature = "zerocopy",
+		derive(AsBytes, FromZeroes, FromBytes, Unaligned)
+	)]
+	#[repr(C)]
+	pub struct BootRecord32 {
+		pub jump_boot: [u8; 3],
+		pub oem_name: [u8; 8],
+		pub bpb: Bpb32,
+		pub tail: BootRecordTail,
+		pub _boot_code: [u8; 0x01A4],
+		pub signature: [u8; 2],
+	}
+
+	#[derive(Clone)]
+	#[cfg_attr(feature = "bytemuck", derive(Copy, Pod, Zeroable))]
+	#[cfg_attr(
+		feature = "zerocopy",
+		derive(AsBytes, FromZeroes, FromBytes, Unaligned)
+	)]
+	#[repr(C)]
+	pub struct BpbCommon {
 		pub blk_size: U16Le,
 		pub cluster_lba_size: u8,
 		pub fat_base_lba: U16Le,
@@ -198,12 +282,6 @@ pub mod reserved_reg {
 		pub heads: U16Le,
 		pub partition_lba_offset: U32Le,
 		pub volume_lba_size32: U32Le,
-		pub rest: [u8; 0x01DA],
-		pub signature: [u8; 2],
-	}
-
-	impl BootRecord {
-		pub const SIGNATURE: [u8; 2] = 0xAA55_u16.to_le_bytes();
 	}
 
 	#[derive(Clone)]
@@ -213,7 +291,8 @@ pub mod reserved_reg {
 		derive(AsBytes, FromZeroes, FromBytes, Unaligned)
 	)]
 	#[repr(C)]
-	pub struct BootRecordExt32 {
+	pub struct Bpb32 {
+		pub common: BpbCommon,
 		pub fat_lba_size32: U32Le,
 		pub ext_flags: U16Le,
 		pub version: U16Le,
@@ -221,7 +300,6 @@ pub mod reserved_reg {
 		pub fsinfo_lba: U16Le,
 		pub backup_lba: U16Le,
 		pub _reserved: [u8; 0xC],
-		pub end: BootRecordEnd,
 	}
 
 	#[derive(Clone)]
@@ -231,11 +309,10 @@ pub mod reserved_reg {
 		derive(AsBytes, FromZeroes, FromBytes, Unaligned)
 	)]
 	#[repr(C)]
-	pub struct BootRecordEnd {
+	pub struct BootRecordTail {
 		pub drive_num: u8,
 		pub _reserved: u8,
-		pub ext: BootRecordEndExt,
-		pub _padding: [u8; 2],
+		pub ext: BootRecordTailExt,
 	}
 
 	#[derive(Clone)]
@@ -245,14 +322,14 @@ pub mod reserved_reg {
 		derive(AsBytes, FromZeroes, FromBytes, Unaligned)
 	)]
 	#[repr(C)]
-	pub struct BootRecordEndExt {
+	pub struct BootRecordTailExt {
 		pub signature: u8,
 		pub id: U32Le,
 		pub label: ShortName,
 		pub fat_type_name: [u8; 8],
 	}
 
-	impl BootRecordEndExt {
+	impl BootRecordTailExt {
 		pub const SIGNATURE: u8 = 0x29;
 	}
 
@@ -274,6 +351,8 @@ pub mod reserved_reg {
 	}
 
 	impl FsInfo {
+		pub const DEFAULT_LBA: Lba = 1;
+
 		pub const LEAD_SIGNATURE: U32Le = *b"RRaA";
 		pub const STRUCT_SIGNATURE: U32Le = *b"rrAa";
 		pub const TRAIL_SIGNATURE: U32Le = 0xAA55_0000_u32.to_le_bytes();
@@ -405,10 +484,11 @@ pub fn name_checksum(name: &ShortName) -> u8 {
 		.fold(0, |sum, &byte| u8::wrapping_add(sum.rotate_right(1), byte))
 }
 
-/// Whether or not a char is valid in an ASCII short name (returns `true` for
+/// Whether or not a char is valid in an ASCII short name (returns `false` for
 /// non-ASCII characters).
 ///
-/// `.` and lower-case ASCII characters are not considered valid.
+/// `.`, lower-case ASCII characters and [`GenericEntry::BYTE0_SIDESTEP_VACANT`]
+/// are not considered valid.
 ///
 /// # Examples
 /// ```
@@ -419,7 +499,7 @@ pub fn name_checksum(name: &ShortName) -> u8 {
 ///         !matches!(
 ///             b,
 ///             (..=0x1F) | b'"' | b'*'..=b',' | b'.' | b'/' | b':'..=b'?' | b'['..=b']'
-///             | b'a'..=b'z' | b'|'
+///             | b'a'..=b'z' | b'|' | 0x80..
 ///         ),
 ///     );
 /// }
@@ -427,8 +507,8 @@ pub fn name_checksum(name: &ShortName) -> u8 {
 pub fn is_valid_ascii_short_char(b: u8) -> bool {
 	static VALID: [u8; 0x20] = [
 		0x00, 0x00, 0x00, 0x00, 0xFB, 0x23, 0xFF, 0x03, 0xFF, 0xFF, 0xFF, 0xC7, 0x01, 0x00, 0x00,
-		0xE8, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-		0xFF, 0xFF,
+		0xE8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00,
 	];
 
 	VALID[b as usize >> 3] & 1_u8.wrapping_shl(b as u32) != 0
@@ -448,7 +528,7 @@ pub fn is_valid_ascii_short_char(b: u8) -> bool {
 ///         ),
 ///     );
 /// }
-/// // all non-ASCII chars are valid
+/// // all non-ASCII code points are valid
 /// assert!(is_valid_long_char(0x80));
 /// ```
 pub fn is_valid_long_char(b: u16) -> bool {

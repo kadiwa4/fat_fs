@@ -20,15 +20,10 @@ pub const MAX_CLUSTER_SIZE: usize = 0x0200_0000;
 ///
 /// **Note:** This is not the same as the cluster count; this is the number of
 /// entries in a FAT and not the number of clusters on the heap.
-///
-/// The value of this limit is phrased ambiguously in the specification:
-///
-/// > ClusterCount + 1 can never exceed FFFFFFF6h.
-///
-/// They probably intended to say `ClusterCount + 1 < 0xFFFF_FFF6`
-/// (as opposed to `<=`). Otherwise the last FAT entry would clash with the
-/// [`BAD_CLUSTER_MARK`].
-pub const MAX_FAT_LEN: ClusterIdx = 0xFFFF_FFF6;
+/// It can also never indicate the maximum valid cluster index for exFAT file
+/// systems. This value is one larger than the maximum valid cluster index could
+/// ever be.
+pub const MAX_FAT_LEN: ClusterIdx = 0xFFFF_FFF7;
 pub const MAX_NAME_LEN: usize = 0xFF;
 /// Special value in the upcase table that indicates that the next n values
 /// are all identity mappings, where n is the next 2-byte word.
