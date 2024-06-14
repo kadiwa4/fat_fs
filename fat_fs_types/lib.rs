@@ -43,7 +43,17 @@ pub type U32Le = [u8; 4];
 pub type U64Le = [u8; 8];
 
 /// A cylinder-head-sector address in the format used by x86's interrupt `0x13`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+///
+/// # Examples
+/// ```
+/// # use fat_fs_types::ChsAddr;
+/// let chs_addr = ChsAddr::new(0x0102, 3, 5).unwrap();
+/// assert_eq!(chs_addr, ChsAddr([3, 0x45, 2]));
+/// assert_eq!(chs_addr.cylinder(), 0x0102);
+/// assert_eq!(chs_addr.head(), 3);
+/// assert_eq!(chs_addr.sector(), 5);
+/// ```
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "bytemuck", derive(Pod, Zeroable))]
 #[cfg_attr(
 	feature = "zerocopy",
@@ -87,6 +97,16 @@ impl ChsAddr {
 	}
 }
 
+impl Debug for ChsAddr {
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		f.debug_struct("ChsAddr")
+			.field("cylinder", &self.cylinder())
+			.field("head", &self.head())
+			.field("sector", &self.sector())
+			.finish()
+	}
+}
+
 impl PartialOrd for ChsAddr {
 	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
 		Some(Self::cmp(self, other))
@@ -110,6 +130,18 @@ pub struct DiskGeometry {
 
 impl DiskGeometry {
 	/// Converts a logical block address to a cylinder-head-sector address.
+	///
+	/// # Examples
+	/// ```
+	/// # use fat_fs_types::{ChsAddr, DiskGeometry};
+	/// let geometry = DiskGeometry {
+	///     heads: 200,
+	///     sectors_per_track: 10,
+	/// };
+	/// assert_eq!(geometry.lba_to_chs(0), ChsAddr::new(0, 0, 1));
+	/// assert_eq!(geometry.lba_to_chs(0x1234), ChsAddr::new(2, 66, 1));
+	/// assert_eq!(geometry.lba_to_chs(99_999), ChsAddr::new(49, 199, 10));
+	/// ```
 	pub const fn lba_to_chs(self, lba: Lba) -> Option<ChsAddr> {
 		let sector = (lba % self.sectors_per_track as u64) as u8 + 1;
 		let head_and_cylinder = lba / self.sectors_per_track as u64;
@@ -125,10 +157,29 @@ impl DiskGeometry {
 	///
 	/// For valid inputs, the result is always smaller than
 	/// `0x0400 * heads * sectors_per_track`.
+	///
+	/// # Examples
+	/// ```
+	/// # use fat_fs_types::{ChsAddr, DiskGeometry};
+	/// let geometry = DiskGeometry {
+	///     heads: 200,
+	///     sectors_per_track: 10,
+	/// };
+	/// assert_eq!(geometry.chs_to_lba(ChsAddr::new(0, 0, 1).unwrap()), 0);
+	/// assert_eq!(
+	///     geometry.chs_to_lba(ChsAddr::new(2, 66, 1).unwrap()),
+	///     0x1234
+	/// );
+	/// assert_eq!(
+	///     geometry.chs_to_lba(ChsAddr::new(49, 199, 10).unwrap()),
+	///     99_999
+	/// );
+	/// ```
 	pub const fn chs_to_lba(self, chs: ChsAddr) -> Lba {
 		(chs.cylinder() as u64 * self.heads as u64 + chs.head() as u64)
 			* self.sectors_per_track as u64
 			+ chs.sector() as u64
+			- 1
 	}
 }
 
@@ -148,6 +199,8 @@ pub const MAX_YEAR: i32 = 2107;
 /// # use fat_fs_types::{pack_date, pack_time, MAX_YEAR};
 /// assert_eq!(pack_date((2015, 5, 15)).unwrap(), 0x46AF);
 ///
+/// // this overflows and the error gives you the maximum valid datetime via the
+/// // `saturated_*` methods
 /// let e = pack_date((2177, 5, 15)).unwrap_err();
 /// assert!(e.overflow());
 /// let (max_time, max_time_10ms) = pack_time((23, 59, 59_990));
@@ -158,19 +211,11 @@ pub const MAX_YEAR: i32 = 2107;
 /// ```
 pub const fn pack_date((year, month, day): (i32, u8, u8)) -> Result<u16, PackDateError> {
 	if year < MIN_YEAR {
-		return Err(PackDateError {
-			saturating_date: 0x21,
-			saturating_time: 0,
-			saturating_time_10ms: 0,
-		});
+		return Err(PackDateError { overflow: false });
 	}
 	let year = year - MIN_YEAR;
 	if year >= 0x80 {
-		return Err(PackDateError {
-			saturating_date: 0xFF9F,
-			saturating_time: 0xBF7D,
-			saturating_time_10ms: 199,
-		});
+		return Err(PackDateError { overflow: true });
 	}
 	Ok((year as u16) << 9 | (month as u16) << 5 | day as u16)
 }
@@ -197,35 +242,50 @@ pub const fn unpack_date(packed: u16) -> (i32, u8, u8) {
 /// Error thrown by [`pack_date`].
 #[derive(Clone, Copy, Debug)]
 pub struct PackDateError {
-	saturating_date: u16,
-	saturating_time: u16,
-	saturating_time_10ms: u8,
+	overflow: bool,
 }
 
 impl PackDateError {
 	/// Whether an overflow was the cause, as opposed to an underflow.
 	#[inline]
 	pub const fn overflow(self) -> bool {
-		self.saturating_time != 0
+		self.overflow
+	}
+	/// Whether an underflow was the cause, as opposed to an overflow.
+	#[inline]
+	pub const fn underflow(self) -> bool {
+		!self.overflow
 	}
 	#[inline]
 	pub const fn saturating_date(self) -> u16 {
-		self.saturating_date
+		if self.overflow {
+			0xFF9F
+		} else {
+			0x21
+		}
 	}
 	#[inline]
 	pub const fn saturating_time(self) -> u16 {
-		self.saturating_time
+		if self.overflow {
+			0xBF7D
+		} else {
+			0
+		}
 	}
 	#[inline]
 	pub const fn saturating_time_10ms(self) -> u8 {
-		self.saturating_time_10ms
+		if self.overflow {
+			199
+		} else {
+			0
+		}
 	}
 }
 
 impl Display for PackDateError {
 	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
 		f.write_str("FAT date packing error: ")?;
-		f.write_str(if self.overflow() {
+		f.write_str(if self.overflow {
 			"overflow"
 		} else {
 			"underflow"

@@ -10,6 +10,7 @@ use crate::{ClusterIdx, Lba, U16Le, U32Le};
 
 /// Number of special sentinel values that indicate the end of an allocation.
 pub const END_OF_ALLOC_MARK_COUNT: ClusterIdx = 8;
+pub const FREE_CLUSTER_MARK: ClusterIdx = 0;
 pub const MAX_CLUSTER_SIZE: usize = 0x8000;
 
 /// Minimum and maximum FAT lengths for every FAT type.
@@ -104,11 +105,7 @@ impl FatType {
 
 	#[inline]
 	pub const fn bad_cluster_mark(self) -> ClusterIdx {
-		match self {
-			Self::Fat12 => 0x0FF7,
-			Self::Fat16 => 0xFFF7,
-			Self::Fat32 => 0x0FFF_FFF7,
-		}
+		self.canon_end_of_alloc_mark() - END_OF_ALLOC_MARK_COUNT
 	}
 
 	/// Sentinel value indicating the end of an allocation.
@@ -117,7 +114,11 @@ impl FatType {
 	/// return the canonical value according to Microsoft.
 	#[inline]
 	pub const fn canon_end_of_alloc_mark(self) -> ClusterIdx {
-		self.bad_cluster_mark() + END_OF_ALLOC_MARK_COUNT
+		match self {
+			Self::Fat12 => 0x0FFF,
+			Self::Fat16 => 0xFFFF,
+			Self::Fat32 => 0x0FFF_FFFF,
+		}
 	}
 
 	#[inline]
@@ -144,6 +145,7 @@ impl FatType {
 		}
 	}
 
+	/// On FAT16/32, unpacks the flags placed in the FAT entry at index 1.
 	#[inline]
 	pub const fn unpack_fat_entry1(self, entry: ClusterIdx) -> Option<FatEntry1Flags> {
 		if matches!(self, Self::Fat12) {

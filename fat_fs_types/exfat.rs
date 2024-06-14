@@ -1,9 +1,6 @@
 //! exFAT.
 
-pub use crate::fat::{
-	is_valid_long_char as is_valid_char, pack_write_time as pack_access_time,
-	unpack_write_time as unpack_access_time,
-};
+pub use crate::fat::is_valid_long_char as is_valid_char;
 
 use core::hash::Hasher;
 
@@ -500,4 +497,34 @@ pub mod dir {
 	impl VendorAllocEntry {
 		pub const TYPE: u8 = 0xE1;
 	}
+}
+
+/// Encodes `(hours, minutes, seconds)` into a packed native-endian exFAT access
+/// time.
+///
+/// The result will not represent a valid time if the input was invalid.
+///
+/// # Examples
+/// ```
+/// # use fat_fs_types::exfat::pack_access_time;
+/// assert_eq!(pack_access_time((17, 29, 3)), 0x8BA1);
+/// ```
+#[inline]
+pub const fn pack_access_time(hours_mins_secs: (u8, u8, u8)) -> u16 {
+	crate::fat::pack_write_time(hours_mins_secs)
+}
+
+/// Decodes a packed native-endian exFAT access time into
+/// `(hours, minutes, seconds)`.
+///
+/// The result might not be a valid time.
+///
+/// # Examples
+/// ```
+/// # use fat_fs_types::exfat::unpack_access_time;
+/// assert_eq!(unpack_access_time(0x8BA1), (17, 29, 2));
+/// ```
+#[inline]
+pub const fn unpack_access_time(packed: u16) -> (u8, u8, u8) {
+	crate::fat::unpack_write_time(packed)
 }
