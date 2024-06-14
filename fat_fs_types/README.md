@@ -10,3 +10,6 @@ All `#[repr(C)]` structs with public fields have a stable layout, no padding and
 
 - EFI FAT specification: [download](https://download.microsoft.com/download/1/6/1/161ba512-40e2-4cc9-843a-923143f3456c/fatgen103.doc)
 - [exFAT specification](https://learn.microsoft.com/en-us/windows/win32/fileio/exfat-specification)
+
+## License
+This crate is licensed under the [MIT license](https://opensource.org/license/mit).

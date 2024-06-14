@@ -21,8 +21,5 @@ zerocopy = { version = "0.7.31", default-features = false, features = ["derive"]
 [features]
 std = []
 
-[lib]
-path = "lib.rs"
-
 [lints]
 workspace = true
