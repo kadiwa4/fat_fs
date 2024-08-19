@@ -1,4 +1,4 @@
-# set the tab width for viewing code on github
+# set the tab width for GitHub's code view
 [*]
 indent_style = tab
 indent_size = 4
