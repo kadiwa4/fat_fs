@@ -4,9 +4,6 @@
 pub mod exfat;
 pub mod fat;
 
-#[cfg(feature = "std")]
-extern crate std;
-
 #[cfg(feature = "bytemuck")]
 pub use bytemuck;
 #[cfg(feature = "zerocopy")]
@@ -293,8 +290,7 @@ impl Display for PackDateError {
 	}
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for PackDateError {}
+impl core::error::Error for PackDateError {}
 
 /// Encodes `(hours, minutes, millis)` into a packed native-endian FAT/exFAT
 /// time, rounding down.

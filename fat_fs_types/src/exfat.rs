@@ -2,7 +2,7 @@
 
 pub use crate::fat::is_valid_long_char as is_valid_char;
 
-use core::hash::Hasher;
+use core::{hash::Hasher, mem::offset_of};
 
 use bitflags::bitflags;
 #[cfg(feature = "bytemuck")]
@@ -66,12 +66,6 @@ pub struct BootRecord {
 }
 
 impl BootRecord {
-	// offsets of struct fields
-	const FLAGS_OFFSET: usize = 0x6A;
-	const BLK_SIZE_LOG2_OFFSET: usize = 0x6C;
-	const PERCENT_OCCUPIED_OFFSET: usize = 0x70;
-	const RESERVED_OFFSET: usize = 0x71;
-
 	pub const JUMP_BOOT: [u8; 3] = [0xEB, 0x76, 0x90];
 	pub const FS_NAME: [u8; 8] = *b"EXFAT   ";
 	pub const SIGNATURE: [u8; 2] = 0xAA55_u16.to_le_bytes();
@@ -151,9 +145,11 @@ impl Checksum {
 	///
 	/// `buf` has too be a multiple of one block in size.
 	pub fn write_main_boot_block(&mut self, buf: &[u8]) {
-		self.write(&buf[..BootRecord::FLAGS_OFFSET]);
-		self.write(&buf[BootRecord::BLK_SIZE_LOG2_OFFSET..BootRecord::PERCENT_OCCUPIED_OFFSET]);
-		self.write(&buf[BootRecord::RESERVED_OFFSET..]);
+		self.write(&buf[..offset_of!(BootRecord, flags)]);
+		self.write(
+			&buf[offset_of!(BootRecord, blk_size_log2)..offset_of!(BootRecord, percent_occupied)],
+		);
+		self.write(&buf[offset_of!(BootRecord, _reserved)..]);
 	}
 
 	/// Return the computed checksum.
