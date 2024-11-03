@@ -8,7 +8,7 @@ use bitflags::bitflags;
 #[cfg(feature = "bytemuck")]
 use bytemuck::{Pod, Zeroable};
 #[cfg(feature = "zerocopy")]
-use zerocopy::{AsBytes, FromBytes, FromZeroes, Unaligned};
+use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned};
 
 use crate::{ClusterIdx, Guid, U16Le, U32Le, U64Le};
 
@@ -38,7 +38,7 @@ pub const END_OF_ALLOC_MARK: ClusterIdx = 0xFFFF_FFFF;
 #[cfg_attr(feature = "bytemuck", derive(Copy, Pod, Zeroable))]
 #[cfg_attr(
 	feature = "zerocopy",
-	derive(AsBytes, FromZeroes, FromBytes, Unaligned)
+	derive(FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned)
 )]
 #[repr(C)]
 pub struct BootRecord {
@@ -81,7 +81,7 @@ impl BootRecord {
 #[cfg_attr(feature = "bytemuck", derive(Pod, Zeroable))]
 #[cfg_attr(
 	feature = "zerocopy",
-	derive(AsBytes, FromZeroes, FromBytes, Unaligned)
+	derive(FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned)
 )]
 #[repr(C, packed)]
 pub struct VolumeFlags(u16);
@@ -99,7 +99,7 @@ bitflags! {
 #[cfg_attr(feature = "bytemuck", derive(Copy, Pod, Zeroable))]
 #[cfg_attr(
 	feature = "zerocopy",
-	derive(AsBytes, FromZeroes, FromBytes, Unaligned)
+	derive(FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned)
 )]
 #[repr(C)]
 pub struct GenericParams {
@@ -118,7 +118,7 @@ impl GenericParams {
 #[cfg_attr(feature = "bytemuck", derive(Copy, Pod, Zeroable))]
 #[cfg_attr(
 	feature = "zerocopy",
-	derive(AsBytes, FromZeroes, FromBytes, Unaligned)
+	derive(FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned)
 )]
 #[repr(C)]
 pub struct FlashParams {
@@ -184,7 +184,7 @@ pub mod dir {
 	#[cfg_attr(feature = "bytemuck", derive(Copy, Pod, Zeroable))]
 	#[cfg_attr(
 		feature = "zerocopy",
-		derive(AsBytes, FromZeroes, FromBytes, Unaligned)
+		derive(FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned)
 	)]
 	#[repr(C)]
 	pub struct GenericEntry {
@@ -206,7 +206,7 @@ pub mod dir {
 	#[cfg_attr(feature = "bytemuck", derive(Copy, Pod, Zeroable))]
 	#[cfg_attr(
 		feature = "zerocopy",
-		derive(AsBytes, FromZeroes, FromBytes, Unaligned)
+		derive(FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned)
 	)]
 	#[repr(C)]
 	pub struct PrimaryEntry {
@@ -223,7 +223,7 @@ pub mod dir {
 	#[cfg_attr(feature = "bytemuck", derive(Pod, Zeroable))]
 	#[cfg_attr(
 		feature = "zerocopy",
-		derive(AsBytes, FromZeroes, FromBytes, Unaligned)
+		derive(FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned)
 	)]
 	#[repr(C, packed)]
 	pub struct PrimaryEntryFlags(u16);
@@ -239,7 +239,7 @@ pub mod dir {
 	#[cfg_attr(feature = "bytemuck", derive(Copy, Pod, Zeroable))]
 	#[cfg_attr(
 		feature = "zerocopy",
-		derive(AsBytes, FromZeroes, FromBytes, Unaligned)
+		derive(FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned)
 	)]
 	#[repr(C)]
 	pub struct AllocBitmapEntry {
@@ -258,7 +258,7 @@ pub mod dir {
 	#[cfg_attr(feature = "bytemuck", derive(Pod, Zeroable))]
 	#[cfg_attr(
 		feature = "zerocopy",
-		derive(AsBytes, FromZeroes, FromBytes, Unaligned)
+		derive(FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned)
 	)]
 	#[repr(transparent)]
 	pub struct AllocBitmapEntryFlags(u8);
@@ -273,7 +273,7 @@ pub mod dir {
 	#[cfg_attr(feature = "bytemuck", derive(Copy, Pod, Zeroable))]
 	#[cfg_attr(
 		feature = "zerocopy",
-		derive(AsBytes, FromZeroes, FromBytes, Unaligned)
+		derive(FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned)
 	)]
 	#[repr(C)]
 	pub struct UpcaseTableEntry {
@@ -293,7 +293,7 @@ pub mod dir {
 	#[cfg_attr(feature = "bytemuck", derive(Copy, Pod, Zeroable))]
 	#[cfg_attr(
 		feature = "zerocopy",
-		derive(AsBytes, FromZeroes, FromBytes, Unaligned)
+		derive(FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned)
 	)]
 	#[repr(C)]
 	pub struct VolumeLabelEntry {
@@ -312,7 +312,7 @@ pub mod dir {
 	#[cfg_attr(feature = "bytemuck", derive(Copy, Pod, Zeroable))]
 	#[cfg_attr(
 		feature = "zerocopy",
-		derive(AsBytes, FromZeroes, FromBytes, Unaligned)
+		derive(FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned)
 	)]
 	#[repr(C)]
 	pub struct ChildEntry {
@@ -347,7 +347,7 @@ pub mod dir {
 	#[cfg_attr(feature = "bytemuck", derive(Pod, Zeroable))]
 	#[cfg_attr(
 		feature = "zerocopy",
-		derive(AsBytes, FromZeroes, FromBytes, Unaligned)
+		derive(FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned)
 	)]
 	#[repr(C, packed)]
 	pub struct Attributes(u16);
@@ -371,7 +371,7 @@ pub mod dir {
 	#[cfg_attr(feature = "bytemuck", derive(Copy, Pod, Zeroable))]
 	#[cfg_attr(
 		feature = "zerocopy",
-		derive(AsBytes, FromZeroes, FromBytes, Unaligned)
+		derive(FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned)
 	)]
 	#[repr(C)]
 	pub struct VolumeGuidEntry {
@@ -391,7 +391,7 @@ pub mod dir {
 	#[cfg_attr(feature = "bytemuck", derive(Copy, Pod, Zeroable))]
 	#[cfg_attr(
 		feature = "zerocopy",
-		derive(AsBytes, FromZeroes, FromBytes, Unaligned)
+		derive(FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned)
 	)]
 	#[repr(C)]
 	pub struct SecondaryEntry {
@@ -406,7 +406,7 @@ pub mod dir {
 	#[cfg_attr(feature = "bytemuck", derive(Pod, Zeroable))]
 	#[cfg_attr(
 		feature = "zerocopy",
-		derive(AsBytes, FromZeroes, FromBytes, Unaligned)
+		derive(FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned)
 	)]
 	#[repr(transparent)]
 	pub struct SecondaryEntryFlags(u8);
@@ -422,7 +422,7 @@ pub mod dir {
 	#[cfg_attr(feature = "bytemuck", derive(Copy, Pod, Zeroable))]
 	#[cfg_attr(
 		feature = "zerocopy",
-		derive(AsBytes, FromZeroes, FromBytes, Unaligned)
+		derive(FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned)
 	)]
 	#[repr(C)]
 	pub struct StreamExtEntry {
@@ -446,7 +446,7 @@ pub mod dir {
 	#[cfg_attr(feature = "bytemuck", derive(Copy, Pod, Zeroable))]
 	#[cfg_attr(
 		feature = "zerocopy",
-		derive(AsBytes, FromZeroes, FromBytes, Unaligned)
+		derive(FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned)
 	)]
 	#[repr(C)]
 	pub struct NameEntry {
@@ -464,7 +464,7 @@ pub mod dir {
 	#[cfg_attr(feature = "bytemuck", derive(Copy, Pod, Zeroable))]
 	#[cfg_attr(
 		feature = "zerocopy",
-		derive(AsBytes, FromZeroes, FromBytes, Unaligned)
+		derive(FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned)
 	)]
 	#[repr(C)]
 	pub struct VendorExtEntry {
@@ -482,7 +482,7 @@ pub mod dir {
 	#[cfg_attr(feature = "bytemuck", derive(Copy, Pod, Zeroable))]
 	#[cfg_attr(
 		feature = "zerocopy",
-		derive(AsBytes, FromZeroes, FromBytes, Unaligned)
+		derive(FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned)
 	)]
 	#[repr(C)]
 	pub struct VendorAllocEntry {

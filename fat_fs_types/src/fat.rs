@@ -4,7 +4,7 @@ use bitflags::bitflags;
 #[cfg(feature = "bytemuck")]
 use bytemuck::{Pod, Zeroable};
 #[cfg(feature = "zerocopy")]
-use zerocopy::{AsBytes, FromBytes, FromZeroes, Unaligned};
+use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned};
 
 use crate::{ClusterIdx, Lba, U16Le, U32Le};
 
@@ -217,7 +217,7 @@ pub mod boot_reg {
 	#[cfg_attr(feature = "bytemuck", derive(Copy, Pod, Zeroable))]
 	#[cfg_attr(
 		feature = "zerocopy",
-		derive(AsBytes, FromZeroes, FromBytes, Unaligned)
+		derive(FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned)
 	)]
 	#[repr(C)]
 	pub struct BootRecordCommon {
@@ -236,7 +236,7 @@ pub mod boot_reg {
 	#[cfg_attr(feature = "bytemuck", derive(Copy, Pod, Zeroable))]
 	#[cfg_attr(
 		feature = "zerocopy",
-		derive(AsBytes, FromZeroes, FromBytes, Unaligned)
+		derive(FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned)
 	)]
 	#[repr(C)]
 	pub struct BootRecord12_16 {
@@ -252,7 +252,7 @@ pub mod boot_reg {
 	#[cfg_attr(feature = "bytemuck", derive(Copy, Pod, Zeroable))]
 	#[cfg_attr(
 		feature = "zerocopy",
-		derive(AsBytes, FromZeroes, FromBytes, Unaligned)
+		derive(FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned)
 	)]
 	#[repr(C)]
 	pub struct BootRecord32 {
@@ -268,7 +268,7 @@ pub mod boot_reg {
 	#[cfg_attr(feature = "bytemuck", derive(Copy, Pod, Zeroable))]
 	#[cfg_attr(
 		feature = "zerocopy",
-		derive(AsBytes, FromZeroes, FromBytes, Unaligned)
+		derive(FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned)
 	)]
 	#[repr(C)]
 	pub struct BpbCommon {
@@ -290,7 +290,7 @@ pub mod boot_reg {
 	#[cfg_attr(feature = "bytemuck", derive(Copy, Pod, Zeroable))]
 	#[cfg_attr(
 		feature = "zerocopy",
-		derive(AsBytes, FromZeroes, FromBytes, Unaligned)
+		derive(FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned)
 	)]
 	#[repr(C)]
 	pub struct Bpb32 {
@@ -308,7 +308,7 @@ pub mod boot_reg {
 	#[cfg_attr(feature = "bytemuck", derive(Copy, Pod, Zeroable))]
 	#[cfg_attr(
 		feature = "zerocopy",
-		derive(AsBytes, FromZeroes, FromBytes, Unaligned)
+		derive(FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned)
 	)]
 	#[repr(C)]
 	pub struct BootRecordTail {
@@ -321,7 +321,7 @@ pub mod boot_reg {
 	#[cfg_attr(feature = "bytemuck", derive(Copy, Pod, Zeroable))]
 	#[cfg_attr(
 		feature = "zerocopy",
-		derive(AsBytes, FromZeroes, FromBytes, Unaligned)
+		derive(FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned)
 	)]
 	#[repr(C)]
 	pub struct BootRecordTailExt {
@@ -339,7 +339,7 @@ pub mod boot_reg {
 	#[cfg_attr(feature = "bytemuck", derive(Copy, Pod, Zeroable))]
 	#[cfg_attr(
 		feature = "zerocopy",
-		derive(AsBytes, FromZeroes, FromBytes, Unaligned)
+		derive(FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned)
 	)]
 	#[repr(C)]
 	pub struct FsInfo {
@@ -365,7 +365,7 @@ pub mod boot_reg {
 #[cfg_attr(feature = "bytemuck", derive(Copy, Pod, Zeroable))]
 #[cfg_attr(
 	feature = "zerocopy",
-	derive(AsBytes, FromZeroes, FromBytes, Unaligned)
+	derive(FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned)
 )]
 #[repr(C)]
 pub struct GenericEntry {
@@ -385,7 +385,7 @@ impl GenericEntry {
 #[cfg_attr(feature = "bytemuck", derive(Copy, Pod, Zeroable))]
 #[cfg_attr(
 	feature = "zerocopy",
-	derive(AsBytes, FromZeroes, FromBytes, Unaligned)
+	derive(FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned)
 )]
 #[repr(C)]
 pub struct ChildEntry {
@@ -408,7 +408,7 @@ pub struct ChildEntry {
 #[cfg_attr(feature = "bytemuck", derive(Copy, Pod, Zeroable))]
 #[cfg_attr(
 	feature = "zerocopy",
-	derive(AsBytes, FromZeroes, FromBytes, Unaligned)
+	derive(FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned)
 )]
 #[repr(C)]
 pub struct LongNameEntry {
@@ -437,7 +437,7 @@ impl LongNameEntry {
 #[cfg_attr(feature = "bytemuck", derive(Pod, Zeroable))]
 #[cfg_attr(
 	feature = "zerocopy",
-	derive(AsBytes, FromZeroes, FromBytes, Unaligned)
+	derive(FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned)
 )]
 #[repr(transparent)]
 pub struct Attributes(u8);

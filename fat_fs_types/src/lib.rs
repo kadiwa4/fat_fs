@@ -20,7 +20,7 @@ use core::{
 #[cfg(feature = "bytemuck")]
 use bytemuck::{Pod, Zeroable};
 #[cfg(feature = "zerocopy")]
-use zerocopy::{AsBytes, FromBytes, FromZeroes, Unaligned};
+use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned};
 
 pub const MIN_BLK_SIZE: usize = 0x0200;
 pub const MAX_BLK_SIZE: usize = 0x1000;
@@ -57,7 +57,7 @@ pub type U64Le = [u8; 8];
 #[cfg_attr(feature = "bytemuck", derive(Pod, Zeroable))]
 #[cfg_attr(
 	feature = "zerocopy",
-	derive(AsBytes, FromZeroes, FromBytes, Unaligned)
+	derive(FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned)
 )]
 #[repr(C)]
 pub struct ChsAddr(pub [u8; 3]);
